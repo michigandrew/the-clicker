@@ -1,0 +1,17 @@
+# The Clicker: Python dependencies
+#
+# The installer (deploy/setup.sh) installs these for you; this file is for
+# manual installs and reproducibility. Floors below are the
+# versions this was developed/tested against, newer usually works, but pyatv
+# in particular changes its API across releases, so pin if you hit trouble.
+
+pyatv>=0.16            # Apple TV control (mute / skip / playback state)
+fastapi>=0.110         # web API + dashboard
+uvicorn>=0.27          # ASGI server that runs FastAPI
+numpy>=1.24            # image array math
+
+# OpenCV: use the headless build on a server/LXC (no GUI libs needed).
+# On a desktop where you want native preview windows, swap in `opencv-python`.
+opencv-python-headless>=4.8
+
+# pydantic is pulled in automatically by fastapi (used for request models).

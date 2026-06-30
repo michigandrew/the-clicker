@@ -1,0 +1,36 @@
+__pycache__/
+*.pyc
+venv/
+coddle/
+
+# Credentials (machine-specific, contains pairing keys)
+credentials.json
+
+# Persisted last-running session (machine-specific runtime state)
+.last_session.json
+
+# Profiles are machine-specific calibrations and contain captured network logo
+# imagery, keep them local, not in the repo. The dir itself is kept via .gitkeep.
+profiles/*
+!profiles/.gitkeep
+
+# Local dev tooling / workflow artifacts (not part of the shipped project)
+.claude/
+docs/
+
+# Ship only the README, keep design notes / other markdown local
+*.md
+!README.md
+
+# Test artifacts
+test_frame*.png
+test_roi_*.png
+debug_frame*.jpg
+verify*.png
+probe_*.png
+corner_crop*.jpg
+gemma_*.png
+gemma_*.jpg
+detected_logo.png
+current_*.png
+commercial_*.png
