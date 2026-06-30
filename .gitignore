@@ -22,15 +22,5 @@ docs/
 *.md
 !README.md
 
-# Test artifacts
-test_frame*.png
-test_roi_*.png
-debug_frame*.jpg
-verify*.png
-probe_*.png
-corner_crop*.jpg
-gemma_*.png
-gemma_*.jpg
-detected_logo.png
-current_*.png
-commercial_*.png
+# Debug / test artifacts (frames, ROIs, calibration snapshots) go here
+scratch/

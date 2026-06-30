@@ -5,6 +5,7 @@ Supports both Linux V4L2 device paths and macOS device indices.
 
 import logging
 import os
+import pathlib
 import platform
 
 import cv2
@@ -208,19 +209,24 @@ def extract_corner_rois(
 # ----------------------------------------------------------------------
 
 def _test():
+    # Dev-only helper: dump a frame + corner ROIs into the gitignored scratch/
+    # dir so they don't litter the repo root.
+    scratch = pathlib.Path(__file__).parent / "scratch"
+    scratch.mkdir(exist_ok=True)
     with FrameCapture() as cap:
         print("Grabbing a test frame...")
         frame = cap.grab_frame()
         if frame is not None:
             print(f"Got frame: {frame.shape}")
-            cv2.imwrite("test_frame.png", frame)
-            print("Saved to test_frame.png")
+            frame_path = scratch / "test_frame.png"
+            cv2.imwrite(str(frame_path), frame)
+            print(f"Saved to {frame_path}")
 
             rois = extract_corner_rois(frame)
             for name, roi in rois.items():
-                fname = f"test_roi_{name}.png"
-                cv2.imwrite(fname, roi)
-                print(f"Saved ROI {name}: {roi.shape} -> {fname}")
+                roi_path = scratch / f"test_roi_{name}.png"
+                cv2.imwrite(str(roi_path), roi)
+                print(f"Saved ROI {name}: {roi.shape} -> {roi_path}")
         else:
             print("No frame captured.")
 
