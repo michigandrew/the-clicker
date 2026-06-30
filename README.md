@@ -200,3 +200,9 @@ journalctl -u the-clicker -f      # live logs. STATE CHANGE lines show detection
 - Built and tuned against one real live TV streaming + Apple TV + soundbar setup. Plan to adjust thresholds, volume steps, and calibrations for your own gear.
 - Works on live TV channels that show a persistent corner logo. Content with no logo (or where the logo also vanishes during the show) won't detect well.
 - The hardware path (splitter, output compatibility, capture on Linux) depends on your exact gear. Test the capture end to end before counting on it.
+
+---
+
+## License
+
+[MIT](LICENSE). Use it, fork it, adapt it to your own gear.
