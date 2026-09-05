@@ -102,6 +102,34 @@ async def stop_engine():
     return {"ok": True, "state": engine.state.value}
 
 
+class HoldRequest(BaseModel):
+    seconds: float
+    reason: str = ""
+
+
+@app.post("/api/hold")
+async def hold_capture(req: HoldRequest):
+    """Keep the capture card free for another process for `seconds`.
+
+    The overnight capture rig calls this before it records; the engine and
+    the dashboard's ad hoc frame grabs refuse to open the card until the hold
+    expires or is released.
+    """
+    until = engine.hold_capture(req.seconds, req.reason)
+    return {"ok": True, "held_until": until}
+
+
+@app.post("/api/hold/release")
+async def release_capture():
+    engine.release_capture()
+    return {"ok": True}
+
+
+def _refuse_if_held():
+    if engine._cap is None and engine.capture_held():
+        raise HTTPException(status_code=409, detail="capture card is held by another process")
+
+
 @app.post("/api/disarm")
 async def disarm_engine():
     """Emergency restore, unmute, reset detection, keep running."""
@@ -307,6 +335,7 @@ async def get_live_palette():
     from calibrate import compute_hs_histogram
 
     # Borrow the engine's open capture if it's running; otherwise open briefly.
+    _refuse_if_held()
     cap = None
     try:
         if engine._cap is not None:
@@ -530,6 +559,7 @@ async def capture_check():
 @app.get("/api/snapshot")
 async def get_snapshot():
     """Grab a single frame from the capture card. Works without the engine running."""
+    _refuse_if_held()
     cap = None
     try:
         if engine._cap is not None:

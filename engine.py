@@ -58,6 +58,7 @@ class EngineStatus:
     last_update: float = 0.0
     error: str | None = None
     corner_snapshot_b64: str | None = None  # JPEG of the detected corner, base64
+    capture_held_until: float | None = None  # another process owns the card until then
 
 
 class Engine:
@@ -72,6 +73,14 @@ class Engine:
         self._channel: str | None = None
 
         self._shadow = False
+        # Capture hold: the card is shared with the overnight capture rig
+        # (gambling-meter, LXC 104). While a hold is in force nothing here may
+        # open /dev/video0 - not the engine, not the dashboard's live palette
+        # or snapshot, which otherwise open it every couple of seconds while a
+        # dashboard tab is left open. The hold expires on its own, so a rig
+        # that dies cannot lock the Clicker out of its own card.
+        self._hold_until = 0.0
+        self._hold_reason = ""
 
         # Live telemetry for the dashboard
         self._detection_state = DetectionState.WATCHING
@@ -136,6 +145,7 @@ class Engine:
             last_update=time.time(),
             error=self._error,
             corner_snapshot_b64=corner_b64,
+            capture_held_until=self.hold_expiry(),
         )
 
     def _set_intervention_mode(self, mode: "PlaybackMode | None"):
@@ -147,6 +157,28 @@ class Engine:
             self._detector.set_break_decay(mode == PlaybackMode.LIVE)
 
     # ------------------------------------------------------------------
+    # Capture hold
+    # ------------------------------------------------------------------
+
+    def hold_capture(self, seconds: float, reason: str = "") -> float:
+        """Refuse to open the capture card for `seconds`; returns the expiry."""
+        self._hold_until = time.time() + max(float(seconds), 0.0)
+        self._hold_reason = reason
+        logger.info("Capture hold for %.0fs (%s)", seconds, reason or "no reason given")
+        return self._hold_until
+
+    def release_capture(self):
+        if self._hold_until:
+            logger.info("Capture hold released")
+        self._hold_until = 0.0
+        self._hold_reason = ""
+
+    def capture_held(self) -> bool:
+        return time.time() < self._hold_until
+
+    def hold_expiry(self) -> float | None:
+        return self._hold_until if self.capture_held() else None
+
     # Controls
     # ------------------------------------------------------------------
 
@@ -159,6 +191,10 @@ class Engine:
         if self._state not in (EngineState.STOPPED, EngineState.ERROR):
             logger.warning("Engine already in state %s, ignoring start.", self._state.value)
             return
+        if self.capture_held():
+            raise RuntimeError(
+                f"capture card is held by {self._hold_reason or 'another process'} "
+                f"until {time.strftime('%H:%M', time.localtime(self._hold_until))}")
 
         self._state = EngineState.STARTING
         self._error = None
