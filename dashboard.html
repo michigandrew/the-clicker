@@ -554,6 +554,13 @@ select:focus, .input:focus { border-color: var(--accent); }
           <div id="suggest-results" class="hidden" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)"></div>
         </div>
       </div>
+
+      <div class="section">
+        <div class="section-title">Timeline</div>
+        <div class="card">
+          <div class="chart-wrap"><canvas id="timeline-chart-tune"></canvas></div>
+        </div>
+      </div>
     </div>
 
     <div class="panel">
@@ -822,8 +829,11 @@ async function pollStatus(){if(pollInFlight)return;pollInFlight=true;try{
 }catch(e){}finally{pollInFlight=false}}
 
 // Chart
-let timelineChart=null;
-function initChart(){const ctx=document.getElementById('timeline-chart').getContext('2d');timelineChart=new Chart(ctx,{type:'line',data:{datasets:[
+// One Chart.js instance per canvas: Chart.js can't render a single instance
+// into two canvases, and the Watch and Tune tabs each want the timeline.
+let timelineCharts=[];
+const TIMELINE_CANVASES=['timeline-chart','timeline-chart-tune'];
+function makeChart(canvasId){const el=document.getElementById(canvasId);if(!el)return null;const ctx=el.getContext('2d');return new Chart(ctx,{type:'line',data:{datasets:[
 {label:'Logo (template)',data:[],borderColor:'rgba(139,173,138,0.85)',borderWidth:1.5,pointRadius:0,tension:0.3,fill:{target:'origin',above:'rgba(139,173,138,0.05)'}},
 {label:'Logo (edge)',data:[],borderColor:'rgba(212,184,112,0.45)',borderWidth:1,pointRadius:0,tension:0.3},
 {label:'Color',data:[],borderColor:'rgba(212,113,74,0.85)',borderWidth:1.5,pointRadius:0,tension:0.3}
@@ -831,22 +841,20 @@ function initChart(){const ctx=document.getElementById('timeline-chart').getCont
 scales:{x:{type:'linear',ticks:{color:'rgba(235,225,210,0.2)',font:{size:9},callback:v=>Math.round(v)+'s'},grid:{color:'rgba(235,225,210,0.04)'},border:{display:false}},
 y:{min:0,max:1,ticks:{color:'rgba(235,225,210,0.2)',font:{size:9},stepSize:0.25},grid:{color:'rgba(235,225,210,0.04)'},border:{display:false}}},
 plugins:{legend:{labels:{color:'rgba(235,225,210,0.5)',font:{size:10}}},annotation:{annotations:{}}}}})}
+function initChart(){timelineCharts=TIMELINE_CANVASES.map(makeChart).filter(Boolean)}
 
 let lastHistoryLen=0,liveMode='logo';
-async function updateChart(){if(!timelineChart)return;try{const d=await api('GET','/api/history');if(!d.history.length)return;if(d.history.length===lastHistoryLen)return;lastHistoryLen=d.history.length;
+async function updateChart(){if(!timelineCharts.length)return;try{const d=await api('GET','/api/history');if(!d.history.length)return;if(d.history.length===lastHistoryLen)return;lastHistoryLen=d.history.length;
 const t0=d.history[0].t;
 const mode=d.mode||'logo';
 // Stash live context for the state aware UI (confidence rows, settings gating)
 liveMode=mode;
-timelineChart.data.datasets[0].data=d.history.map(p=>({x:p.t-t0,y:p.tmpl}));
-timelineChart.data.datasets[1].data=d.history.map(p=>({x:p.t-t0,y:p.edge}));
-timelineChart.data.datasets[2].data=d.history.map(p=>({x:p.t-t0,y:p.color||0}));
+const dsTmpl=d.history.map(p=>({x:p.t-t0,y:p.tmpl}));
+const dsEdge=d.history.map(p=>({x:p.t-t0,y:p.edge}));
+const dsColor=d.history.map(p=>({x:p.t-t0,y:p.color||0}));
 // Show only the datasets relevant to the active profile mode.
 const showLogo=(mode==='logo'||mode==='combo');
 const showColor=(mode==='color'||mode==='combo');
-timelineChart.data.datasets[0].hidden=!showLogo;
-timelineChart.data.datasets[1].hidden=!showLogo;
-timelineChart.data.datasets[2].hidden=!showColor;
 const ann={};
 // Raw signal threshold lines annotate the active deciding signals.
 if(showLogo){const lt=d.logo_threshold!==undefined?d.logo_threshold:d.threshold;ann.logo_threshold={type:'line',yMin:lt,yMax:lt,borderColor:'rgba(139,173,138,0.4)',borderWidth:1,borderDash:[4,4],label:{display:true,content:'logo '+lt,position:'end',color:'rgba(139,173,138,0.7)',font:{size:8},backgroundColor:'rgba(0,0,0,0.3)',padding:{x:3,y:1}}}}
@@ -854,7 +862,12 @@ if(showColor){const ct=d.color_threshold!==undefined?d.color_threshold:d.thresho
 const cs=[],ce=[];for(const e of d.events){if(e.type==='commercial_start')cs.push(e.t-t0);if(e.type==='commercial_end')ce.push(e.t-t0)}
 for(let i=0;i<cs.length;i++){ann['c_'+i]={type:'box',xMin:cs[i],xMax:i<ce.length?ce[i]:d.history[d.history.length-1].t-t0,backgroundColor:'rgba(196,106,94,0.06)',borderWidth:0}}
 let ei=0;for(const e of d.events){if(['skip','mute','unmute'].includes(e.type)){const c=e.type==='skip'?'rgba(139,173,138,0.6)':e.type==='mute'?'rgba(196,106,94,0.5)':'rgba(212,184,112,0.5)';ann['e_'+ei++]={type:'line',xMin:e.t-t0,xMax:e.t-t0,borderColor:c,borderWidth:1.5,borderDash:[2,2],label:{display:true,content:e.type.toUpperCase(),position:'start',color:c,font:{size:8,weight:'600'},backgroundColor:'rgba(0,0,0,0.4)',padding:{x:3,y:1}}}}}
-timelineChart.options.plugins.annotation.annotations=ann;timelineChart.update('none')}catch(e){}}
+for(const ch of timelineCharts){
+ch.data.datasets[0].data=dsTmpl;ch.data.datasets[0].hidden=!showLogo;
+ch.data.datasets[1].data=dsEdge;ch.data.datasets[1].hidden=!showLogo;
+ch.data.datasets[2].data=dsColor;ch.data.datasets[2].hidden=!showColor;
+ch.options.plugins.annotation.annotations=ann;ch.update('none')}
+}catch(e){}}
 
 // Settings
 const SM={'set-first-skip':'FIRST_SKIP_COUNT','set-subsequent-skip':'SUBSEQUENT_SKIP_COUNT','set-settle-time':'SKIP_SETTLE_TIME','set-threshold':'LOGO_MATCH_THRESHOLD','set-logo-recovery':'LOGO_RECOVERY_THRESHOLD','set-debounce':'DEBOUNCE_FRAMES','set-recovery-debounce':'RECOVERY_DEBOUNCE_FRAMES','set-color-threshold':'COLOR_MATCH_THRESHOLD','set-color-recovery':'COLOR_RECOVERY_THRESHOLD','set-color-debounce':'COLOR_DEBOUNCE_FRAMES','set-color-recovery-debounce':'COLOR_RECOVERY_DEBOUNCE_FRAMES','set-mute-steps':'MUTE_STEPS','set-unmute-steps':'UNMUTE_STEPS','set-mode-override':'PLAYBACK_MODE_OVERRIDE','set-max-commercial':'MAX_COMMERCIAL_DURATION','set-reentry-cooldown':'REENTRY_COOLDOWN_SECONDS','set-reentry-debounce':'REENTRY_DEBOUNCE_FRAMES','set-calibration-duration':'CALIBRATION_DURATION'};
@@ -919,7 +932,8 @@ async function clearSamples(){try{await api('POST','/api/mark/clear');document.g
 // Tab navigation (active tab persists in localStorage)
 function showTab(name){for(const t of['watch','tune','setup']){document.getElementById('tab-'+t).style.display=t===name?'':'none';document.getElementById('tab-btn-'+t).classList.toggle('active',t===name)}
   localStorage.setItem('activeTab',name);
-  if(name==='watch'&&timelineChart)setTimeout(()=>timelineChart.resize(),0)}
+  // A chart sized while its tab was hidden measures 0 wide; resize on reveal.
+  if(name==='watch'||name==='tune')setTimeout(()=>{for(const ch of timelineCharts)ch.resize()},0)}
 function initTabs(){const t=localStorage.getItem('activeTab');showTab(['watch','tune','setup'].includes(t)?t:'watch')}
 function fmt(v){return(v===undefined||v===null)?'-':Number(v).toFixed(2)}
 function renderSignalRow(name,signal,matchKey,recoveryKey,debounceKey,recoveryDebounceKey){if(!signal||!signal.available)return '<div style="opacity:0.5;font-size:0.78rem;margin-bottom:8px"><strong>'+name+'</strong>: not enough signal in samples</div>';
