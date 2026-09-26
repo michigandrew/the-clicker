@@ -670,6 +670,21 @@ class Engine:
         try:
             logger.info("Detection loop started.")
             while True:
+                if self.capture_held():
+                    if self._cap:
+                        logger.info(
+                            "Capture hold in force (%s), releasing device.",
+                            self._hold_reason or "another process",
+                        )
+                        self._cap.close()
+                        self._cap = None
+                    await asyncio.sleep(1)
+                    continue
+                elif self._cap is None:
+                    logger.info("Capture hold released, reopening device.")
+                    self._cap = FrameCapture()
+                    self._cap.open()
+
                 frame = self._cap.grab_frame()
                 if frame is None:
                     logger.warning("Failed to grab frame, retrying...")
